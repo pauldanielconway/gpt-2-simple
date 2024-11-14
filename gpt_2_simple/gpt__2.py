@@ -44,12 +44,12 @@ class HParams():
         Number of Layers: In deep learning, this can include the number of hidden layers in a neural network.
         Number of Units/Neurons: The number of neurons in each layer of a neural network.
         Dropout Rate: The fraction of neurons to drop during training to prevent overfitting.
-        Activation Functions: Functions applied to each neuron’s output in a neural network (e.g., ReLU, sigmoid, tanh).
+        Activation Functions: Functions applied to each neuron’s output in a neural network (e.g., GELU, ReLU, sigmoid, tanh).
         Optimization Algorithms: Methods used to minimize the loss function (e.g., SGD, Adam, RMSprop).
     """
     def __init__(
             self, 
-            n_vocab=32768,
+            n_vocab=50257,
             n_ctx=1024,
             n_embd=768,
             n_head=12,
@@ -235,7 +235,7 @@ def get_value(a):
 
 def gelu(x):
     """
-    Approximation of GELU (Gaussian Error Linear Unit) function using hyperbolic tangent (tanh):
+    Activation Function: Approximation of GELU (Gaussian Error Linear Unit) function using hyperbolic tangent (tanh):
     """
     return 0.5*x*(1+tf.tanh(np.sqrt(2/np.pi)*(x+0.044715*tf.pow(x, 3))))
 
@@ -897,3 +897,105 @@ def finetune(sess,
     except KeyboardInterrupt:
         print('interrupted')
         save()
+
+
+
+
+
+def generate(sess,
+             run_name='run1',
+             checkpoint_dir='checkpoint',
+             model_name=None,
+             model_dir='models',
+             return_as_list=False,
+             truncate=None,
+             destination_path=None,
+             sample_delim='=' * 20 + '\n',
+             prefix=None,
+             seed=None,
+             nsamples=1,
+             batch_size=1,
+             length=1023,
+             temperature=0.7,
+             top_k=0,
+             top_p=0.0,
+             include_prefix=True):
+    """Generates text from a model loaded into memory.
+
+    Adapted from https://github.com/openai/gpt-2/blob/master/src/interactive_conditional_samples.py
+    """
+
+    if batch_size is None:
+        batch_size = 1
+    assert nsamples % batch_size == 0
+
+    if nsamples == 1:
+        sample_delim = ''
+
+    if prefix == '':
+        prefix = None
+
+    if model_name:
+        checkpoint_path = os.path.join(model_dir, model_name)
+    else:
+        checkpoint_path = os.path.join(checkpoint_dir, run_name)
+
+    enc = get_encoder(checkpoint_path)
+    hparams: HParams = HParams()
+
+    if prefix:
+        context = tf.compat.v1.placeholder(tf.int32, [batch_size, None])
+        context_tokens = enc.encode(prefix)
+
+    np.random.seed(seed)
+    tf.compat.v1.set_random_seed(seed)
+
+    output = sample_sequence(
+        hparams=hparams,
+        length=min(length, length - (len(context_tokens) if prefix else 0)),
+        start_token=enc.encoder['<|endoftext|>'] if not prefix else None,
+        context=context if prefix else None,
+        batch_size=batch_size,
+        temperature=temperature, top_k=top_k, top_p=top_p
+    )[:, 1:]
+
+    if destination_path:
+        f = codecs.open(destination_path, 'w', 'utf-8')
+    generated = 0
+    gen_texts = []
+    while generated < nsamples:
+        if not prefix:
+            out = sess.run(output)
+        else:
+            out = sess.run(output, feed_dict={
+                    context: batch_size * [context_tokens]
+                })
+        for i in range(batch_size):
+            generated += 1
+            gen_text = enc.decode(out[i])
+            if prefix:
+                gen_text = enc.decode(context_tokens[:1]) + gen_text
+            if truncate:
+                truncate_esc = re.escape(truncate)
+                if prefix and not include_prefix:
+                    prefix_esc = re.escape(prefix)
+                    pattern = '(?:{})(.*?)(?:{})'.format(prefix_esc,
+                                                         truncate_esc)
+                else:
+                    pattern = '(.*?)(?:{})'.format(truncate_esc)
+
+                trunc_text = re.search(pattern, gen_text, re.S)
+                if trunc_text:
+                    gen_text = trunc_text.group(1)
+            gen_text = gen_text.lstrip('\n')
+            if destination_path:
+                f.write("{}\n{}".format(gen_text, sample_delim))
+            if not return_as_list and not destination_path:
+                print("{}\n{}".format(gen_text, sample_delim), end='')
+            gen_texts.append(gen_text)
+
+    if destination_path:
+        f.close()
+
+    if return_as_list:
+        return gen_texts
