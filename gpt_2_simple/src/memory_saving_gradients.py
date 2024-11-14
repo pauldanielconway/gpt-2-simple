@@ -24,7 +24,7 @@ setattr(tf.compat.v1.GraphKeys, "VARIABLES", "variables")
 from tensorflow.python.ops import gradients as tf_gradients_lib
 tf_gradients = tf_gradients_lib.gradients
 
-MIN_CHECKPOINT_NODE_SIZE=1024    # use lower value during testing
+MIN_CHECKPOINT_NODE_SIZE=512    # use lower value during testing
 
 # specific versions we can use to do process-wide replacement of tf.gradients
 def gradients_speed(ys, xs, grad_ys=None, **kwargs):

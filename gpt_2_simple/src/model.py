@@ -9,6 +9,9 @@ class HParams():
         self.n_embd = n_embd
         self.n_head = n_head
         self.n_layer = n_layer
+
+    def to_string(self):
+        return f"HParams(n_vocab={self.n_vocab}, n_ctx={self.n_ctx}, n_embd={self.n_embd}, n_head={self.n_head}, n_layer={self.n_layer})"
         
     def override_from_dict(self, param_dict):
         try:
@@ -32,14 +35,15 @@ class HParams():
         except:
             pass
 
-def default_hparams():
+def default_hparams() -> HParams:
     return HParams(
         n_vocab=0,
-        n_ctx=1024,
+        n_ctx=512,
         n_embd=768,
         n_head=12,
         n_layer=12,
     )
+
 
 def shape_list(x):
     """Deal with dynamic shape in tensorflow cleanly."""
@@ -159,8 +163,6 @@ def block(x, scope, *, past, hparams):
         x = x + m
         return x, present
 
-def past_shape(*, hparams, batch_size=None, sequence=None):
-    return [batch_size, hparams.n_layer, 2, hparams.n_head, sequence, hparams.n_embd // hparams.n_head]
 
 def expand_tile(value, size):
     """Add a new axis of given size."""

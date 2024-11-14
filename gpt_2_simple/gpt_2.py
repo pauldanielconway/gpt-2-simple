@@ -136,7 +136,7 @@ def finetune(sess,
              run_name='run1',
              checkpoint_dir='checkpoint',
              sample_every=100,
-             sample_length=1023,
+             sample_length=512,
              sample_num=1,
              multi_gpu=False,
              save_every=1000,
@@ -176,9 +176,10 @@ def finetune(sess,
             raise(fnf_error)
 
     enc = encoder.get_encoder(checkpoint_path)
-    hparams = model.default_hparams()
+    hparams: model.HParams = model.default_hparams()
     with open(os.path.join(checkpoint_path, 'hparams.json')) as f:
         hparams.override_from_dict(json.load(f))
+    print(hparams.to_string())
 
     if sample_length > hparams.n_ctx:
         raise ValueError(
@@ -310,7 +311,7 @@ def finetune(sess,
             fp.write('\n'.join(all_text))
 
     def sample_batch():
-        return [data_sampler.sample(1024) for _ in range(batch_size)]
+        return [data_sampler.sample(512) for _ in range(batch_size)]
 
     if overwrite and restore_from == 'latest':
         for file in files:

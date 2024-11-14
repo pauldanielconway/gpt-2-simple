@@ -3,6 +3,11 @@ import tensorflow as tf
 from gpt_2_simple.src import model
 
 
+def past_shape(*, hparams, batch_size=None, sequence=None):
+    shape = [batch_size, hparams.n_layer, 2, hparams.n_head, sequence, hparams.n_embd // hparams.n_head]
+    print(f"past_shape: {shape}")
+    return shape
+
 def top_k_logits(logits, k):
     if k == 0:
         # no truncation
@@ -53,7 +58,7 @@ def sample_sequence(*, hparams, length, start_token=None,
 
         logits = lm_output['logits'][:, :, :hparams.n_vocab]
         presents = lm_output['present']
-        presents.set_shape(model.past_shape(
+        presents.set_shape(past_shape(
             hparams=hparams, batch_size=batch_size))
         return {
             'logits': logits,
@@ -84,8 +89,15 @@ def sample_sequence(*, hparams, length, start_token=None,
         def cond(*args):
             return True
 
+        """
+        Map Structure: 
+        Applies the "stop_gradient" to the result of the "while_loop"
+        """
         _, _, tokens = tf.nest.map_structure(
             tf.stop_gradient,
+            # Continues to execute the "body" method while 
+            # 1) the "cond" is true OR 
+            # 2) iteration < maximum_iterations
             tf.while_loop(
                 cond=cond,
                 body=body,
@@ -96,7 +108,7 @@ def sample_sequence(*, hparams, length, start_token=None,
                     context,
                 ],
                 shape_invariants=[
-                    tf.TensorShape(model.past_shape(hparams=hparams, batch_size=batch_size)),
+                    tf.TensorShape(past_shape(hparams=hparams, batch_size=batch_size)),
                     tf.TensorShape([batch_size]),
                     tf.TensorShape([batch_size, None]),
                 ],
